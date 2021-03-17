@@ -1,6 +1,8 @@
 # Required packages
-libs <- c("ade4","SCGLR","ggplot2","data.table","raster","maptree")
-lapply(libs, require, character.only = TRUE)
+libs <- c("ade4","SCGLR","ggplot2","raster","maptree","ggalt","viridis")
+for(l in libs) {
+  library(l, character.only = TRUE)
+}
 
 # Required functions
 source("Functions/TAG.R")
@@ -53,17 +55,19 @@ tmp_clust <- abond[,c("lon", "lat", "id_cell")]
 mdist <- dist(tmp_clust[c("lon","lat")])
 hc <- hclust(mdist, method="ward.D")
 tmp_clust$Clust_100km = cutree(hc, k=ngroup)
+
+# plot clusters
 plot(tmp_clust$lon, tmp_clust$lat, col=sample(rainbow(ngroup))[as.factor(tmp_clust$Clust_100km)],
       pch=20,xlab="lon",ylab="lat",asp=1,cex=0.5)
 
 # Predictions on the validation dataset
-repet = ngroup
-gpeval = tmp_clust$Clust_100km
-plots =1:nrow(abond)
+repet <- ngroup
+gpeval <- tmp_clust$Clust_100km
+plots <- 1:nrow(abond)
 
 mat_pred_val = as.matrix(abond[, nY])
 for (i in 1:repet) {
-  print(paste(i, "/", repet))
+  message(i, "/", repet)
   plots_val <- plots[gpeval == i]
   plots_cal <- plots[gpeval != i]
   genus.scglr2 <- scglr(form,data=abond,K=kOpt,offset=abond$offset,subset=plots_cal,
@@ -83,7 +87,7 @@ summary(spear)
 
 # Summary statistics at community level
 dudiCA <- dudi.coa(abond[,nY], scann =FALSE, nf = 10) # Correspondence analysis (CA) done on observations
-compowholeCA <- suprow(dudiCA, mat_pred_val[, nY]) # Projecting predictions in the CA perfomed on observations 
+compowholeCA <- suprow(dudiCA, mat_pred_val[, nY]) # Projecting predictions in the CA performed on observations 
 diag(cor(dudiCA$li, compowholeCA$lisup,method="spearman"))
 
 #################################################
@@ -93,16 +97,16 @@ diag(cor(dudiCA$li, compowholeCA$lisup,method="spearman"))
 GridTot <- readRDS("Data/GridTot.rds")
 # Predictions over the full study area
 xTot <- model.matrix(form, data = GridTot, rhs = 1:length(form)[2])
-prediction <- data.table(multivariatePredictGlm( xTot,family = rep("poisson", length(nY)),beta = as.matrix(genus.scglr$beta)))
-prediction<- data.table(prediction, lon = GridTot$lon,lat = GridTot$lat)
+prediction <- data.frame(multivariatePredictGlm( xTot,family = rep("poisson", length(nY)),beta = as.matrix(genus.scglr$beta)))
+prediction<- data.frame(prediction, lon = GridTot$lon,lat = GridTot$lat)
 
 # Floristic analysis 
-datFlo <- as.data.frame(prediction[,nY,with=F])
-dudiPred <- dudi.coa(datFlo, scannf=F, nf=5)
+datFlo <- prediction[,nY]
+dudiPred <- dudi.coa(datFlo, scannf=FALSE, nf=5)
 
 # Map first three predicted CA axes (Fig 1 of the paper)
-dataCA=data.table(prediction[,.(lon,lat)],dudiPred$li[,1:3])
-rastRGBflo=rasterFromXYZ(dataCA)
+dataCA <- data.frame(prediction[, c("lon","lat")],dudiPred$li[,1:3])
+rastRGBflo <- rasterFromXYZ(dataCA)
 plot(rastRGBflo)
 
 # Map functional traits (TO be done)
@@ -112,12 +116,12 @@ plot(rastRGBflo)
 Naxes <- 5
 TreeClust <- hclust(dist(dudiPred$li[,1:Naxes]),method = "ward.D")
 SubTree <- clip.clust(TreeClust,k = ngroup,data=prediction)
-gpe=c()
-for(i in 1:length(SubTree$membership)) gpe=c(gpe,rep(names(SubTree$membership)[i],length((SubTree$membership[[i]]))))
-dat <- data.frame(row=as.numeric(unlist(SubTree$membership)),gpe=gpe)
-classPredict <- data.frame(prediction[,c("lon","lat")],
-                        clFac=dat[order(dat$row),"gpe"])
+extract <- function(cl, m){
+  res <- data.frame(prediction[as.integer(m), c("lon","lat")], clFac=cl)
+}
+classPredict <- mapply(extract, names(SubTree$membership), SubTree$membership, SIMPLIFY = FALSE)
+classPredict <- do.call(rbind, classPredict)
+
 rasttest <- rasterFromXYZ(classPredict)
 plot(rasttest)
-
 
