@@ -1,5 +1,5 @@
 # Required packages
-libs <- c("ade4","ape","SCGLR","ggplot2","raster","maptree","ggalt","viridis","data.table","scales")
+libs <- c("ade4","ape","SCGLR","ggplot2","raster","maptree","ggalt","viridis","data.table","scales","phylobase","adephylo","entropart")
 for(l in libs) {
   library(l, character.only = TRUE)
 }
@@ -11,7 +11,8 @@ source("Functions/GGfuns.R")
 # Load data
 abond <- readRDS("Data/CoForData.rds") # Abundance data (available upon request see XXXXXXXXXXXX)
 tabTrait <- readRDS("Data/traitTab.rds") # Trait data (available at XXXXXXXXXXXX)
-GridTot <- readRDS("Data/GridTot.rds") # Study area with predictors
+GridTot <- readRDS("Data/GridTot.rds") # Study area with predictors (available at XXXXXXXXXXXX)
+Anthr <- stack("Data/Anthropogenicpressure.tif")  # Human forest-disturbance index in the present and in 2085 (available at XXXXXXXXXXXX)
 
 #################################################
 # ORGANIZE DATA 
@@ -258,11 +259,7 @@ plot(MeanExpositionClim)
   
 # #############################################################################
 ## ADAPTATION
-library(picante)
-library(entropart)
-library(adephylo)
-library(phylobase)
-  
+
 # List of Genera in dataset
 Gendata <- sapply(strsplit(nY,split="_"),"[",1)
   
@@ -280,13 +277,9 @@ Tree <- keep.tip(PhyloTree,tip=c(TipToKeepSp,TipToKeepGen))
 
 # Change names to genus level
 Tree$tip.label=sapply(strsplit(Tree$tip.label,split="_"),"[",1)
-length(Tree$tip.label)
 
-# Change names in Prediction
-dataPred=prediction[,nY]
-dataObsOri=as.data.frame(abond)
-dataObs=dataObsOri[,nY]
 # Sum individuals per genus
+dataPred=prediction[,nY]
 dataPredt=as.data.frame(t(dataPred))
 dataPredt$genus=Gendata
 dataPredt=data.table(dataPredt)
@@ -324,7 +317,7 @@ AdaptationRast[is.na(MeanSensitivityClim)]=NA
 plot(AdaptationRast)
 
 # #############################################################################
-## VULNERABILITY 
+## CLIMATE VULNERABILITY 
 
 ########################################################
 # Normalize the three components of vulnerability
@@ -339,8 +332,48 @@ VulnerabilityMaps=stack(MeanSensitivityClim,
                         MeanExpositionClim,
                         AdaptationRast,
                         VulnerabilityClim45_2085)
-names(VulnerabilityMaps)=c("Sensitivity","Exposure","Adaptaion","Vulnerabilty")
+names(VulnerabilityMaps)=c("Sensitivity","Exposure","Adaptation","Climate_vulnerabilty")
 plot(VulnerabilityMaps)
 
-writeRaster(stackCA,file="~/Rejou/Post-doc_Cofortip/AnalyseCOFORTIP/SCGLR/NewMs/Nature/Submitted/Round2/Round3/Soumission/Revision/Submission/Dataverse/Climate_vulnerability/ClimateVulnerability.tif",
+writeRaster(VulnerabilityMaps,file="~/Rejou/Post-doc_Cofortip/AnalyseCOFORTIP/SCGLR/NewMs/Nature/Submitted/Round2/Round3/Soumission/Revision/Submission/Dataverse/Climate_vulnerability/ClimateVulnerability.tif",
             format="GTiff",overwrite=TRUE)
+
+# #############################################################################
+## ANTHROPIC VULNERABILITY 
+
+VulnerabilityAnthr=resample(Anthr$Anthropogenicpressure.2,MeanSensitivityClim)
+VulnerabilityAnthr=crop(VulnerabilityAnthr,MeanSensitivityClim)
+VulnerabilityAnthr[is.na(MeanSensitivityClim)]=NA
+plot(VulnerabilityAnthr)
+
+# #############################################################################
+## VULNERABILITY TO GLOBAL CHANGES
+library(colorplaner)# remotes::install_github("wmurphyrd/colorplaner") # the 23/04/2020
+
+VulnerabilityAnthrNorm=calc(VulnerabilityAnthr,scales::rescale)
+VulnerabilityClimNorm45_2085=calc(VulnerabilityClim45_2085,scales::rescale)
+globVulnerability=stack(VulnerabilityClimNorm45_2085,VulnerabilityAnthrNorm)
+
+datVuln=as.data.frame(globVulnerability,xy=T)
+names(datVuln)=c("x","y","VulnerabilityClim","VulnerabilityAnthr")
+# Apply a strech to variables
+Strech <- function(x){
+  v <- quantile(x, c(0.01,0.99), na.rm = TRUE)
+  x[!is.na(x) & x < v[1]] <- v[1]
+  x[!is.na(x) & x > v[2]] <- v[2]
+  out=normalize(x)
+}
+datVuln$VulnerabilityClim=Strech(datVuln$VulnerabilityClim)
+datVuln$VulnerabilityAnthr=Strech(datVuln$VulnerabilityAnthr)
+
+VulnTot <- ggplot()+
+  labs(x="long", y="lat")+
+  coord_fixed(xlim=c(8.1,27), ylim=c(-6,5))+
+  geom_tile(aes(x = x, y = y, fill = VulnerabilityClim, fill2 = VulnerabilityAnthr),data=datVuln)+
+  scale_fill_colorplane(name="toto",axis_title ="Vulnerability to \nclimate change", 
+                        axis_title_y = "B Anthropogenic \npressure in 2085", 
+                        color_projection = YUV_projection, Y=0.65,
+                        na.color = NA,
+                        breaks =c(0.1,0.9), breaks_y =c(0.1,0.9), 
+                        labels =c("Low","High"), labels_y =c("Low","High"))
+
