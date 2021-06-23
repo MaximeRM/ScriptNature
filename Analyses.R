@@ -9,10 +9,10 @@ source("Functions/TAG.R")
 source("Functions/GGfuns.R")
 
 # Load data
-abond <- readRDS("Data/CoForData.rds") # Abundance data (available upon request see XXXXXXXXXXXX)
-tabTrait <- readRDS("Data/traitTab.rds") # Trait data (available at XXXXXXXXXXXX)
-GridTot <- readRDS("Data/GridTot.rds") # Study area with predictors (available at XXXXXXXXXXXX)
-Anthr <- stack("Data/Anthropogenicpressure.tif")  # Human forest-disturbance index in the present and in 2085 (available at XXXXXXXXXXXX)
+abond <- readRDS("Data/CoForData.rds") # Abundance data (available upon request see http://dx.doi.org/10.18167/DVN1/UCNCA7)
+tabTrait <- readRDS("Data/traitTab.rds") # Trait data (available at http://dx.doi.org/10.18167/DVN1/UCNCA7)
+GridTot <- readRDS("Data/GridTot.rds") # Study area with predictors (available at http://dx.doi.org/10.18167/DVN1/UCNCA7)
+Anthr <- stack("Data/Anthropogenicpressure.tif")  # Human forest-disturbance index in the present and in 2085 (available at http://dx.doi.org/10.18167/DVN1/UCNCA7)
 
 #################################################
 # ORGANIZE DATA 
@@ -148,8 +148,8 @@ writeRaster(typeFlo,file="~/Rejou/Post-doc_Cofortip/AnalyseCOFORTIP/SCGLR/NewMs/
             format="GTiff",overwrite=TRUE)
 
 pred <- prediction[GridTot$CCI != 160,]
-write.csv(pred,file="~/Rejou/Post-doc_Cofortip/AnalyseCOFORTIP/SCGLR/NewMs/Nature/Submitted/Round2/Round3/Soumission/Revision/Submission/Dataverse/Predicted_abundances/PredictedAbundance.csv",
-          row.names = F)
+saveRDS(pred,file="~/Rejou/Post-doc_Cofortip/AnalyseCOFORTIP/SCGLR/NewMs/Nature/Submitted/Round2/Round3/Soumission/Revision/Submission/Dataverse/Predicted_abundances/PredictedAbundance.rds")
+
 
 
 #################################################
